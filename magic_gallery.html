@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Magic Gallery</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#000;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
+button,input{font:inherit}.screen{position:fixed;inset:0}.gallery{background:#000;display:flex;align-items:center;justify-content:center;touch-action:none}
+.photo{width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.hidden{display:none!important}.topbar{position:absolute;top:env(safe-area-inset-top);left:0;right:0;height:58px;padding:10px 14px;display:flex;justify-content:space-between;z-index:5;pointer-events:none}.topbar button{pointer-events:auto}
+.ghost{background:rgba(0,0,0,.5);border:0;color:#fff;border-radius:22px;padding:9px 13px}
+.setup{overflow:auto;background:#f5f5f7;color:#111;padding:calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)}
+h1{font-size:28px;margin:0 0 5px}.sub{color:#666;margin-bottom:20px}.card{background:#fff;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 1px 4px #0001}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.slot{border:1.5px dashed #aaa;border-radius:12px;min-height:145px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafafa;position:relative}.slot img{width:100%;height:145px;object-fit:cover}.slot input{position:absolute;inset:0;opacity:0}.slot span{color:#777;text-align:center;padding:10px}.label{font-weight:650;margin-bottom:7px}.actions{display:flex;gap:10px;margin:16px 0}.primary{background:#111;color:#fff;border:0;border-radius:12px;padding:13px 17px}.secondary{background:#ddd;color:#111;border:0;border-radius:12px;padding:13px 17px}.note{font-size:13px;color:#666;line-height:1.4}
+.setname{width:100%;border:1px solid #ccc;border-radius:10px;padding:11px;background:#fff}
+</style>
+</head>
+<body>
+<div id="gallery" class="screen gallery">
+  <img id="photo" class="photo" alt="">
+  <div class="topbar"><button id="setupBtn" class="ghost">Setup</button><button id="resetBtn" class="ghost">Reset</button></div>
+</div>
+
+<div id="setup" class="screen setup hidden">
+  <h1>Magic Gallery</h1>
+  <div class="sub">Create a set of paired photos. Double-tapping a photo leaves that photo unchanged and switches all the others.</div>
+  <input id="setName" class="setname" placeholder="Set name">
+  <div id="cards"></div>
+  <div class="actions"><button id="addBtn" class="primary">+ Add photo</button><button id="playBtn" class="secondary">Play</button></div>
+  <div class="note">Photos are stored in this browser on this device. For best reliability, use a small number of reasonably sized images.</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let state={name:"My Set",items:[],switched:false,index:0};
+let touch={x:0,y:0,t:0,moved:false};
+
+function addItem(){
+  state.items.push({initial:null,alternative:null});
+  renderSetup();
+}
+function renderSetup(){
+  $('setName').value=state.name;
+  $('cards').innerHTML='';
+  state.items.forEach((it,i)=>{
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML=`<div class="label">Photo ${i+1}</div><div class="row">
+      <label><div class="note">Initial photo</div><div class="slot" id="a${i}"><span>${it.initial?'Change photo':'Choose photo'}</span></div><input id="ai${i}" type="file" accept="image/*"></label>
+      <label><div class="note">Switched photo</div><div class="slot" id="b${i}"><span>${it.alternative?'Change photo':'Choose photo'}</span></div><input id="bi${i}" type="file" accept="image/*"></label>
+    </div>`;
+    $('cards').appendChild(c);
+    if(it.initial) showThumb(`a${i}`,it.initial);
+    if(it.alternative) showThumb(`b${i}`,it.alternative);
+    $(`ai${i}`).onchange=e=>loadFile(e.target.files[0],url=>{it.initial=url;renderSetup()});
+    $(`bi${i}`).onchange=e=>loadFile(e.target.files[0],url=>{it.alternative=url;renderSetup()});
+  });
+}
+function showThumb(id,url){const el=$(id);el.innerHTML='';const im=document.createElement('img');im.src=url;el.appendChild(im)}
+function loadFile(file,cb){if(!file)return;const r=new FileReader();r.onload=()=>cb(r.result);r.readAsDataURL(file)}
+function save(){localStorage.setItem('magicGallery',JSON.stringify(state))}
+function load(){try{const x=JSON.parse(localStorage.getItem('magicGallery'));if(x)state=x}catch(e){}}
+function currentURL(){const it=state.items[state.index];return state.switched && it.alternative ? it.alternative : it.initial}
+function show(){
+  const url=currentURL();
+  $('photo').src=url||placeholder();
+}
+function placeholder(){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1800"><rect width="100%" height="100%" fill="#202020"/><text x="50%" y="48%" fill="white" text-anchor="middle" font-family="Arial" font-size="48">Add photos in Setup</text></svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+function play(){state.name=$('setName').value||'My Set';state.index=0;state.switched=false;save();$('setup').classList.add('hidden');$('gallery').classList.remove('hidden');show()}
+function setup(){state.name=$('setName').value||state.name;save();$('gallery').classList.add('hidden');$('setup').classList.remove('hidden');renderSetup()}
+function reset(){state.switched=false;state.index=0;show()}
+
+$('addBtn').onclick=addItem;$('playBtn').onclick=play;$('setupBtn').onclick=setup;$('resetBtn').onclick=reset;
+$('photo').addEventListener('touchstart',e=>{const p=e.changedTouches[0];touch={x:p.clientX,y:p.clientY,t:Date.now(),moved:false}}, {passive:true});
+$('photo').addEventListener('touchmove',e=>{const p=e.changedTouches[0];if(Math.abs(p.clientX-touch.x)>12||Math.abs(p.clientY-touch.y)>12)touch.moved=true},{passive:true});
+$('photo').addEventListener('touchend',e=>{
+  const p=e.changedTouches[0],dx=p.clientX-touch.x,dy=p.clientY-touch.y,dt=Date.now()-touch.t;
+  if(touch.moved && dt<700 && Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)){
+    if(state.items.length){state.index=(state.index+(dx<0?1:-1)+state.items.length)%state.items.length;show()}
+  }
+});
+let lastTap=0;
+$('photo').addEventListener('touchend',e=>{
+  if(touch.moved)return;
+  const p=e.changedTouches[0],dx=p.clientX-touch.x,dy=p.clientY-touch.y,dt=Date.now()-touch.t;
+  if(dt<700 && Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)){
+    state.index=(state.index+(dx<0?1:-1)+state.items.length)%state.items.length; show(); return;
+  }
+  const now=Date.now();
+  if(now-lastTap<380){ state.switched=true; save(); show(); lastTap=0; }
+  else lastTap=now;
+});
+$('photo').addEventListener('dblclick',()=>{state.switched=true;save();show()});
+
+load();
+if(!state.items.length){state.items=[{initial:null,alternative:null},{initial:null,alternative:null},{initial:null,alternative:null}]}
+renderSetup();
+</script>
+</body>
+</html>
